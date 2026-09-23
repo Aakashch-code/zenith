@@ -18,7 +18,7 @@ public class AuditLog {
     private Long id;
 
     @Column(nullable = false, updatable = false)
-    private Long actorId; // The userId of who initiated the action
+    private Long actorId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, updatable = false)
@@ -28,7 +28,7 @@ public class AuditLog {
     private String ipAddress;
 
     @Column(columnDefinition = "TEXT", updatable = false)
-    private String payload; // Stores JSON of the request or error details
+    private String payload;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
