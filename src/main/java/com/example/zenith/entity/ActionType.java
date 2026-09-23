@@ -1,0 +1,6 @@
+package com.example.zenith.entity;
+
+public enum ActionType {
+    TRANSFER_INITIATED, TRANSFER_COMPLETED, TRANSFER_FAILED,
+    ACCOUNT_CREATED, SUSPICIOUS_ACTIVITY_FLAGGED
+}
