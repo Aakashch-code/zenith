@@ -30,11 +30,11 @@ public class LedgerEntry {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Direction direction; // DEBIT or CREDIT
+    private Direction direction;
 
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;
 
     @Column(nullable = false, precision = 19, scale = 4)
-    private BigDecimal balanceAfter; // Snapshot of balance post-transaction
+    private BigDecimal balanceAfter;
 }
