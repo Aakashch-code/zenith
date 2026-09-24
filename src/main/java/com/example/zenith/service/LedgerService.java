@@ -1,10 +1,13 @@
 package com.example.zenith.service;
 
+import com.example.zenith.authentication.application.service.SecuredService;
 import com.example.zenith.entity.*;
 import com.example.zenith.repositoy.AccountRepository;
 import com.example.zenith.repositoy.LedgerEntryRepository;
 import com.example.zenith.repositoy.TransactionRepository;
+
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,120 +17,179 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
-public class LedgerService {
+public class LedgerService extends SecuredService {
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final AuditService auditService;
 
     private static final Long FEE = 1L;
     private static final Long TAX = 2L;
     private static final Long VAULT = 4L;
-
     private static final Set<Long> SYSTEM = Set.of(FEE, TAX, VAULT);
     private static final BigDecimal FEE_RATE = new BigDecimal("0.015");
     private static final BigDecimal GST_RATE = new BigDecimal("0.18");
 
     @Transactional
     public Transaction processTransfer(Long senderId, Long receiverId, BigDecimal amount) {
-        validateAmount(amount);
+        try {
+            validateAmount(amount);
 
-        if (senderId.equals(receiverId))
-            throw new IllegalArgumentException("Cannot transfer to the same account");
+            if (senderId.equals(receiverId))
+                throw new IllegalArgumentException("Cannot transfer to the same account");
 
-        validateUser(senderId);
-        validateUser(receiverId);
+            validateUser(senderId);
+            validateUser(receiverId);
 
-        Map<Long, Account> a = lock(senderId, receiverId, FEE, TAX);
+            Map<Long, Account> a = lock(senderId, receiverId, FEE, TAX);
+            Account sender = a.get(senderId);
 
-        Account sender = a.get(senderId);
-        Account receiver = a.get(receiverId);
-        Account fee = a.get(FEE);
-        Account tax = a.get(TAX);
+            if (!sender.getUserId().equals(currentUserId())) {
+                throw new AccessDeniedException("Unauthorized: You do not own the sender account.");
+            }
 
-        BigDecimal feeAmount = amount.multiply(FEE_RATE)
-                .setScale(4, RoundingMode.HALF_EVEN);
-        BigDecimal gstAmount = feeAmount.multiply(GST_RATE)
-                .setScale(4, RoundingMode.HALF_EVEN);
-        BigDecimal total = amount.add(feeAmount).add(gstAmount);
+            Account receiver = a.get(receiverId);
+            Account fee = a.get(FEE);
+            Account tax = a.get(TAX);
 
-        requireBalance(sender, total, "Insufficient funds to cover amount + fees + GST");
+            BigDecimal feeAmount = amount.multiply(FEE_RATE).setScale(4, RoundingMode.HALF_EVEN);
+            BigDecimal gstAmount = feeAmount.multiply(GST_RATE).setScale(4, RoundingMode.HALF_EVEN);
+            BigDecimal total = amount.add(feeAmount).add(gstAmount);
 
-        Transaction tx = transaction(TransactionType.TRANSFER);
+            requireBalance(sender, total, "Insufficient funds to cover amount + fees + GST");
 
-        debit(tx, sender, total);
-        credit(tx, receiver, amount);
-        credit(tx, fee, feeAmount);
-        credit(tx, tax, gstAmount);
+            Transaction tx = transaction(TransactionType.TRANSFER);
+            debit(tx, sender, total);
+            credit(tx, receiver, amount);
+            credit(tx, fee, feeAmount);
+            credit(tx, tax, gstAmount);
 
-        save(a.values());
-        return tx;
+            save(a.values());
+
+            auditService.logAction(currentUserId(), ActionType.TRANSFER_COMPLETED,
+                    String.format("Transferred %s from Acc %d to Acc %d (Ref: %s)", amount, senderId, receiverId, tx.getReferenceId()));
+
+            return tx;
+
+        } catch (Exception e) {
+            Long actorId = getActorIdSafely();
+            auditService.logAction(actorId, ActionType.TRANSFER_FAILED, "Transfer Failed: " + e.getMessage());
+            throw e;
+        }
     }
 
     @Transactional
     public Transaction processDeposit(Long accountId, BigDecimal amount) {
-        validateAmount(amount);
-        validateUser(accountId);
+        try {
+            validateAmount(amount);
+            validateUser(accountId);
 
-        Map<Long, Account> a = lock(VAULT, accountId);
-        return execute(TransactionType.DEPOSIT, a.get(VAULT), a.get(accountId), amount, a.values());
+            Map<Long, Account> a = lock(VAULT, accountId);
+            Account userAccount = a.get(accountId);
+
+            if (!userAccount.getUserId().equals(currentUserId())) {
+                throw new AccessDeniedException("Unauthorized: You do not own this account.");
+            }
+
+            Transaction tx = execute(TransactionType.DEPOSIT, a.get(VAULT), userAccount, amount, a.values());
+
+            auditService.logAction(currentUserId(), ActionType.DEPOSIT_COMPLETED, "Deposited " + amount + " to Acc " + accountId);
+            return tx;
+
+        } catch (Exception e) {
+            auditService.logAction(getActorIdSafely(), ActionType.DEPOSIT_FAILED, "Deposit Failed: " + e.getMessage());
+            throw e;
+        }
     }
 
     @Transactional
     public Transaction processWithdrawal(Long accountId, BigDecimal amount) {
-        validateAmount(amount);
-        validateUser(accountId);
+        try {
+            validateAmount(amount);
+            validateUser(accountId);
 
-        Map<Long, Account> a = lock(VAULT, accountId);
-        Account user = a.get(accountId);
+            Map<Long, Account> a = lock(VAULT, accountId);
+            Account userAccount = a.get(accountId);
 
-        requireBalance(user, amount, "Insufficient funds for withdrawal");
+            if (!userAccount.getUserId().equals(currentUserId())) {
+                throw new AccessDeniedException("Unauthorized: You do not own this account.");
+            }
 
-        return execute(TransactionType.WITHDRAWAL, user, a.get(VAULT), amount, a.values());
+            requireBalance(userAccount, amount, "Insufficient funds for withdrawal");
+            Transaction tx = execute(TransactionType.WITHDRAWAL, userAccount, a.get(VAULT), amount, a.values());
+
+            auditService.logAction(currentUserId(), ActionType.WITHDRAWAL_COMPLETED, "Withdrew " + amount + " from Acc " + accountId);
+            return tx;
+
+        } catch (Exception e) {
+            auditService.logAction(getActorIdSafely(), ActionType.WITHDRAWAL_FAILED, "Withdrawal Failed: " + e.getMessage());
+            throw e;
+        }
     }
 
     @Transactional
     public Transaction reverseTransaction(String referenceId) {
-        Transaction original = transactionRepository.findByReferenceId(referenceId)
-                .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+        try {
 
-        if (original.getStatus() == TransactionStatus.REVERSED)
-            throw new IllegalStateException("Transaction already reversed");
-
-        List<LedgerEntry> entries =
-                ledgerEntryRepository.findByTransactionId(original.getId());
-
-        Long[] ids = entries.stream()
-                .map(e -> e.getAccount().getId())
-                .distinct()
-                .toArray(Long[]::new);
-
-        Map<Long, Account> accounts = lock(ids);
-        Transaction reversal = transaction(TransactionType.REVERSAL);
-
-        for (LedgerEntry entry : entries) {
-            Account account = accounts.get(entry.getAccount().getId());
-            BigDecimal amount = entry.getAmount();
-            Direction direction = reverse(entry.getDirection());
-
-            if (direction == Direction.CREDIT) {
-                account.setBalance(account.getBalance().add(amount));
-            } else {
-                if (!SYSTEM.contains(account.getId()))
-                    requireBalance(account, amount, "Insufficient funds for reversal");
-
-                account.setBalance(account.getBalance().subtract(amount));
+            if (!isAdmin()) {
+                throw new AccessDeniedException("Unauthorized: Only Admins can reverse transactions.");
             }
 
-            ledger(reversal, account, direction, amount);
+            Transaction original = transactionRepository.findByReferenceId(referenceId)
+                    .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+
+            if (original.getStatus() == TransactionStatus.REVERSED)
+                throw new IllegalStateException("Transaction already reversed");
+
+            List<LedgerEntry> entries = ledgerEntryRepository.findByTransactionId(original.getId());
+
+            Long[] ids = entries.stream()
+                    .map(e -> e.getAccount().getId())
+                    .distinct()
+                    .toArray(Long[]::new);
+
+            Map<Long, Account> accounts = lock(ids);
+            Transaction reversal = transaction(TransactionType.REVERSAL);
+
+            for (LedgerEntry entry : entries) {
+                Account account = accounts.get(entry.getAccount().getId());
+                BigDecimal amt = entry.getAmount();
+                Direction direction = reverse(entry.getDirection());
+
+                if (direction == Direction.CREDIT) {
+                    account.setBalance(account.getBalance().add(amt));
+                } else {
+                    if (!SYSTEM.contains(account.getId()))
+                        requireBalance(account, amt, "Insufficient funds for reversal");
+                    account.setBalance(account.getBalance().subtract(amt));
+                }
+
+                ledger(reversal, account, direction, amt);
+            }
+
+            save(accounts.values());
+            original.setStatus(TransactionStatus.REVERSED);
+            transactionRepository.save(original);
+
+            auditService.logAction(currentUserId(), ActionType.REVERSAL_COMPLETED,
+                    "Admin reversed TX Ref: " + referenceId + " | Reversal TX Ref: " + reversal.getReferenceId());
+
+            return reversal;
+
+        } catch (Exception e) {
+            auditService.logAction(getActorIdSafely(), ActionType.REVERSAL_FAILED,
+                    "Reversal Failed for TX Ref " + referenceId + ": " + e.getMessage());
+            throw e;
         }
+    }
 
-        save(accounts.values());
-
-        original.setStatus(TransactionStatus.REVERSED);
-        transactionRepository.save(original);
-
-        return reversal;
+    private Long getActorIdSafely() {
+        try {
+            return currentUserId();
+        } catch (Exception ex) {
+            return 0L;
+        }
     }
 
     private Transaction execute(TransactionType type, Account debit, Account credit, BigDecimal amount, Collection<Account> accounts) {
