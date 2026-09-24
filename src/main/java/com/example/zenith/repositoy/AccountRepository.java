@@ -1,5 +1,6 @@
 package com.example.zenith.repositoy;
 import com.example.zenith.entity.Account;
+import com.example.zenith.entity.AccountStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -7,7 +8,10 @@ import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface AccountRepository extends JpaRepository<Account, Long> {
 
@@ -15,5 +19,5 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000")})
     @Query("SELECT a FROM Account a WHERE a.id = :id")
     Optional<Account> findByIdForUpdate(@Param("id") Long id);
-
+    List<Account> findByStatusAndIdNotIn(AccountStatus status, Set<Long> excludedIds);
 }

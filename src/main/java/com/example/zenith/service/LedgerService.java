@@ -191,7 +191,26 @@ public class LedgerService extends SecuredService {
             return 0L;
         }
     }
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void applyInterestToAccount(Long accountId, BigDecimal interestAmount) {
+        try {
+            validateAmount(interestAmount);
 
+            Map<Long, Account> a = lock(VAULT, accountId);
+            Account vault = a.get(VAULT);
+            Account user = a.get(accountId);
+
+            Transaction tx = execute(TransactionType.INTEREST_PAYMENT, vault, user, interestAmount, a.values());
+
+            auditService.logAction(0L, ActionType.INTEREST_APPLIED,
+                    "System applied ₹" + interestAmount + " interest to Acc " + accountId);
+
+        } catch (Exception e) {
+            auditService.logAction(0L, ActionType.INTEREST_FAILED,
+                    "Failed to apply interest to Acc " + accountId + ": " + e.getMessage());
+            throw e;
+        }
+    }
     private Transaction execute(TransactionType type, Account debit, Account credit, BigDecimal amount, Collection<Account> accounts) {
         Transaction tx = transaction(type);
         debit(tx, debit, amount);

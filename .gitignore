@@ -168,3 +168,4 @@ coverage/
 *.key
 *.env.local
 *.env.production
+/.apt_generated_tests/
