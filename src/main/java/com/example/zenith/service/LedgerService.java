@@ -23,6 +23,7 @@ public class LedgerService extends SecuredService {
     private final TransactionRepository transactionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final AuditService auditService;
+    private final FraudDetectionService fraudDetectionService;
 
     private static final Long FEE = 1L;
     private static final Long TAX = 2L;
@@ -42,13 +43,17 @@ public class LedgerService extends SecuredService {
             validateUser(senderId);
             validateUser(receiverId);
 
-            Map<Long, Account> a = lock(senderId, receiverId, FEE, TAX);
-            Account sender = a.get(senderId);
+            Account senderCheck = accountRepository.findById(senderId)
+                    .orElseThrow(() -> new IllegalArgumentException("Account not found: " + senderId));
 
-            if (!sender.getUserId().equals(currentUserId())) {
+            if (!senderCheck.getUserId().equals(currentUserId())) {
                 throw new AccessDeniedException("Unauthorized: You do not own the sender account.");
             }
 
+            fraudDetectionService.evaluateTransaction(currentUserId(), amount);
+
+            Map<Long, Account> a = lock(senderId, receiverId, FEE, TAX);
+            Account sender = a.get(senderId);
             Account receiver = a.get(receiverId);
             Account fee = a.get(FEE);
             Account tax = a.get(TAX);
@@ -73,8 +78,7 @@ public class LedgerService extends SecuredService {
             return tx;
 
         } catch (Exception e) {
-            Long actorId = getActorIdSafely();
-            auditService.logAction(actorId, ActionType.TRANSFER_FAILED, "Transfer Failed: " + e.getMessage());
+            auditService.logAction(getActorIdSafely(), ActionType.TRANSFER_FAILED, "Transfer Failed: " + e.getMessage());
             throw e;
         }
     }
@@ -85,12 +89,17 @@ public class LedgerService extends SecuredService {
             validateAmount(amount);
             validateUser(accountId);
 
-            Map<Long, Account> a = lock(VAULT, accountId);
-            Account userAccount = a.get(accountId);
+            Account userCheck = accountRepository.findById(accountId)
+                    .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
 
-            if (!userAccount.getUserId().equals(currentUserId())) {
+            if (!userCheck.getUserId().equals(currentUserId())) {
                 throw new AccessDeniedException("Unauthorized: You do not own this account.");
             }
+
+            fraudDetectionService.evaluateTransaction(currentUserId(), amount);
+
+            Map<Long, Account> a = lock(VAULT, accountId);
+            Account userAccount = a.get(accountId);
 
             Transaction tx = execute(TransactionType.DEPOSIT, a.get(VAULT), userAccount, amount, a.values());
 
@@ -109,12 +118,17 @@ public class LedgerService extends SecuredService {
             validateAmount(amount);
             validateUser(accountId);
 
-            Map<Long, Account> a = lock(VAULT, accountId);
-            Account userAccount = a.get(accountId);
+            Account userCheck = accountRepository.findById(accountId)
+                    .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
 
-            if (!userAccount.getUserId().equals(currentUserId())) {
+            if (!userCheck.getUserId().equals(currentUserId())) {
                 throw new AccessDeniedException("Unauthorized: You do not own this account.");
             }
+
+            fraudDetectionService.evaluateTransaction(currentUserId(), amount);
+
+            Map<Long, Account> a = lock(VAULT, accountId);
+            Account userAccount = a.get(accountId);
 
             requireBalance(userAccount, amount, "Insufficient funds for withdrawal");
             Transaction tx = execute(TransactionType.WITHDRAWAL, userAccount, a.get(VAULT), amount, a.values());
