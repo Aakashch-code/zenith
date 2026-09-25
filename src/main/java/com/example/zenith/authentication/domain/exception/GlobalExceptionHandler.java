@@ -1,5 +1,6 @@
 package com.example.zenith.authentication.domain.exception;
 
+import com.example.zenith.exception.FraudSuspicionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -40,5 +41,9 @@ public class GlobalExceptionHandler {
         ex.getBindingResult().getFieldErrors().forEach(error ->
                 errors.put(error.getField(), error.getDefaultMessage()));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+    }
+    @ExceptionHandler(FraudSuspicionException.class)
+    public ResponseEntity<String> handleFraudSuspicion(FraudSuspicionException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
     }
 }
