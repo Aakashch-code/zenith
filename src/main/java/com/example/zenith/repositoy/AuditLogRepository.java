@@ -2,6 +2,8 @@ package com.example.zenith.repositoy;
 
 import com.example.zenith.entity.ActionType;
 import com.example.zenith.entity.AuditLog;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,4 +29,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             @Param("keyword") String keyword,
             @Param("since") LocalDateTime since
     );
+    Page<AuditLog> findByTimestampBetween(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+
+    Page<AuditLog> findByTimestampGreaterThanEqual(LocalDateTime startDate, Pageable pageable);
 }
