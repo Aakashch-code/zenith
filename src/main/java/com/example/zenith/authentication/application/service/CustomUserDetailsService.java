@@ -1,7 +1,7 @@
 package com.example.zenith.authentication.application.service;
 
 import com.example.zenith.authentication.infrastructure.persistence.UserRepository;
-import com.example.zenith.entity.User;
+
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;

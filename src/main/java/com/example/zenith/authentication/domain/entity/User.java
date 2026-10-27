@@ -1,4 +1,4 @@
-package com.example.zenith.entity;
+package com.example.zenith.authentication.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

@@ -1,6 +1,6 @@
 package com.example.zenith.authentication.application.service;
 
-import com.example.zenith.entity.User;
+import com.example.zenith.authentication.domain.entity.User;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;

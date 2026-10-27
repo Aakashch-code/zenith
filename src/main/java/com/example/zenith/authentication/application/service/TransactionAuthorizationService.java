@@ -3,7 +3,7 @@ package com.example.zenith.authentication.application.service;
 import com.example.zenith.dto.TransferRequest;
 import com.example.zenith.entity.Account;
 import com.example.zenith.entity.Transaction;
-import com.example.zenith.entity.User;
+import com.example.zenith.authentication.domain.entity.User;
 import com.example.zenith.repositoy.AccountRepository;
 import com.example.zenith.service.LedgerService;
 import lombok.RequiredArgsConstructor;
