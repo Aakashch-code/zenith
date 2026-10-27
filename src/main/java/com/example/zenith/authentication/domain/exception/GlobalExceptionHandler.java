@@ -8,6 +8,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -32,7 +33,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+        String errorMessage = (ex.getMessage() != null && ex.getMessage().contains("Invalid value"))
+                ? "Invalid sort direction. Please use 'ASC' or 'DESC'."
+                : ex.getMessage();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorMessage);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -42,8 +46,15 @@ public class GlobalExceptionHandler {
                 errors.put(error.getField(), error.getDefaultMessage()));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
     }
+
     @ExceptionHandler(FraudSuspicionException.class)
     public ResponseEntity<String> handleFraudSuspicion(FraudSuspicionException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<String> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body("Invalid parameter format. For dates, please use 'd/M/yyyy'.");
     }
 }

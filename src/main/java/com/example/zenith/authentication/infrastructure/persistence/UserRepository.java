@@ -1,9 +1,10 @@
 package com.example.zenith.authentication.infrastructure.persistence;
 
+import com.example.zenith.authentication.domain.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
-import com.example.zenith.entity.User;
+
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;

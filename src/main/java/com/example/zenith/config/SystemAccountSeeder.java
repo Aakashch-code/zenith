@@ -1,7 +1,7 @@
 package com.example.zenith.config;
 
 import com.example.zenith.authentication.infrastructure.persistence.UserRepository;
-import com.example.zenith.entity.User;
+import com.example.zenith.authentication.domain.entity.User;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

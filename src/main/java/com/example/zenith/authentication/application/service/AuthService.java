@@ -7,7 +7,7 @@ import com.example.zenith.authentication.infrastructure.persistence.UserReposito
 import com.example.zenith.authentication.infrastructure.security.JwtUtil;
 import com.example.zenith.entity.Account;
 import com.example.zenith.entity.AccountStatus;
-import com.example.zenith.entity.User;
+import com.example.zenith.authentication.domain.entity.User;
 import com.example.zenith.repositoy.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;

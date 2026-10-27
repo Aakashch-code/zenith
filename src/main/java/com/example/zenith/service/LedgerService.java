@@ -6,7 +6,14 @@ import com.example.zenith.repositoy.AccountRepository;
 import com.example.zenith.repositoy.LedgerEntryRepository;
 import com.example.zenith.repositoy.TransactionRepository;
 
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +39,44 @@ public class LedgerService extends SecuredService {
     private static final BigDecimal FEE_RATE = new BigDecimal("0.015");
     private static final BigDecimal GST_RATE = new BigDecimal("0.18");
 
+    @Transactional(readOnly = true)
+    public Page<Transaction> getTransactions(String search, TransactionType type, TransactionStatus status,
+                                             int page, int size, String sortBy, String sortDir) {
+
+        if (!isAdmin()) {
+            throw new AccessDeniedException("Unauthorized: Global transaction view is restricted to Admins.");
+        }
+
+        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Specification<Transaction> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (search != null && !search.isBlank()) {
+                String searchPattern = "%" + search.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("referenceId")), searchPattern),
+                        cb.like(cb.lower(root.get("type").as(String.class)), searchPattern),
+                        cb.like(cb.lower(root.get("status").as(String.class)), searchPattern)
+                ));
+            }
+
+            if (type != null) {
+                predicates.add(cb.equal(root.get("type"), type));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return transactionRepository.findAll(spec, pageable);
+    }
     @Transactional
     public Transaction processTransfer(Long senderId, Long receiverId, BigDecimal amount) {
         try {

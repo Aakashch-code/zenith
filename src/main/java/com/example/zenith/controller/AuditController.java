@@ -22,6 +22,8 @@ public class AuditController {
 
     @GetMapping
     public ResponseEntity<Page<AuditLog>> getAuditLogs(
+            @RequestParam(required = false) String search,
+
             @RequestParam(required = false)
             @DateTimeFormat(pattern = "d/M/yyyy") LocalDate startDate,
 
@@ -33,14 +35,22 @@ public class AuditController {
             @RequestParam(defaultValue = "timestamp") String sortBy,
             @RequestParam(defaultValue = "DESC") String sortDir) {
 
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.fromString(sortDir), sortBy)
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("Start date cannot be after end date.");
+        }
+
+        if (page < 0) {
+            throw new IllegalArgumentException("Page index cannot be less than zero.");
+        }
+        if (size < 1) {
+            throw new IllegalArgumentException("Page size must be at least 1.");
+        }
+
+        Pageable pageable = PageRequest.of(page,size,Sort.by(Sort.Direction.fromString(sortDir), sortBy)
         );
 
         return ResponseEntity.ok(
-                auditService.getAuditLogs(startDate, endDate, pageable)
+                auditService.getAuditLogs(search, startDate, endDate, pageable)
         );
     }
 }
